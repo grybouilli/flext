@@ -1,6 +1,6 @@
 # where is the PD source package?
 # (this should point to the main folder, which has a "src" (PD Vanilla) or "include" (PD extended) subfolder)
-PDPATH=/usr/local/src/pd
+PDPATH=/usr/include/puredata
 
 ###############################################################
 
