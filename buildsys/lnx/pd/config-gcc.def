@@ -46,13 +46,13 @@ SNDOBJ_INC=/usr/local/include/sndobj
 ###############################################################
 
 # make flags (e.g. use multiprocessor)
-#MFLAGS=-j 2
+#MFLAGS=-j16
 
 # user defined compiler flags
 # (check if they match your system!)
 UFLAGS=-ffast-math
 # don't overload new and delete operators
-UFLAGS+=-DFLEXT_USE_CMEM
+UFLAGS+=-DFLEXT_USE_CMEM -DFLEXT_SHARED
 
 # user defined optimization flags
 # (check if they match your system!)
