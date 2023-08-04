@@ -11,15 +11,21 @@ elseif(WIN32)
 endif()
 
 set(PD_SOURCE_PATH ${PD_SOURCE_PATH_DEFAULT} CACHE PATH "Pd src path")
+set(PD_INSTANCE OFF CACHE BOOL "Builds with PDINSTANCE defined")
 
+# setting stk source
 set(STK_SOURCE_PATH_DEFAULT /usr/local/include/stk)
 set(STK_SOURCE_PATH ${STK_SOURCE_PATH_DEFAULT} CACHE PATH "STK src path")
 
+# setting flext install src
 set(FLEXT_SRC_PATH_DEFAULT /usr/local/include)
 set(FLEXT_SRC_PATH ${FLEXT_SRC_PATH_DEFAULT} CACHE PATH "Flext src path")
 
+# setting flext install path
 set(FLEXT_INSTALL_PATH_DEFAULT /usr/local/lib)
 set(FLEXT_INSTALL_PATH ${FLEXT_INSTALL_PATH_DEFAULT} CACHE PATH "Flext install path")
+
+set(FLEXT_PREFIX_LIB ${PROJECT_NAME}-pd CACHE STRING "Flext lib name")
 
 set(FLEXT_SOURCES
     source/flatom.cpp
@@ -76,17 +82,33 @@ set(FLEXT_HEADERS
     source/flsndobj.h
     source/flstdc.h
     source/flstk.h
-    source/flsupport.h)
+    source/flsupport.h
+)
+
+set(FLEXT_LOCKFREE
+    source/lockfree/atomic_int.hpp
+    source/lockfree/atomic_ptr.hpp
+    source/lockfree/branch_hints.hpp
+    source/lockfree/cas.hpp
+    source/lockfree/fifo.hpp
+    source/lockfree/prefix.hpp
+    source/lockfree/stack.hpp)
+
+# ###########        OBJECTS RULE        ############
 add_library(objects OBJECT
     ${FLEXT_SOURCES}
 )
 
 target_compile_definitions(objects PRIVATE FLEXT_USE_CMEM)
 target_compile_definitions(objects PRIVATE FLEXT_USE_SIMD)
-target_compile_definitions(objects PRIVATE FLEXT_SHARED)
 target_compile_definitions(objects PRIVATE FLEXT_EXPORTS)
 target_compile_definitions(objects PRIVATE FLEXT_SYS=2)
 target_compile_definitions(objects PRIVATE PD)
+
+if(${PD_INSTANCE})
+    target_compile_definitions(objects PRIVATE PDINSTANCE)
+endif()
+
 target_compile_options(objects PRIVATE -O3 -ffast-math -fPIC -fvisibility-inlines-hidden)
 
 target_include_directories(objects PRIVATE ${PD_SOURCE_PATH})
@@ -96,12 +118,84 @@ target_include_directories(objects PRIVATE /usr/local/include/sndobj)
 find_package(Threads REQUIRED)
 target_link_libraries(objects PRIVATE Threads::Threads)
 
-add_library(${PROJECT_NAME}-pd SHARED $<TARGET_OBJECTS:objects>)
-target_compile_options(${PROJECT_NAME}-pd PRIVATE -rdynamic -shared -fPIC -Wl,-rpath,"\$ORIGIN",--enable-new-dtags)
-target_link_libraries(${PROJECT_NAME}-pd
+
+# ###########        SINGLE RULE        ############
+set(FLEXT_SINGLE_LIB "${FLEXT_PREFIX_LIB}_s")
+
+if(CMAKE_BUILD_TYPE MATCHES "Debug")
+    set(FLEXT_SINGLE_LIB "${FLEXT_SINGLE_LIB}d")
+endif()
+
+if(PD_INSTANCE)
+    set(FLEXT_SINGLE_LIB "${FLEXT_SINGLE_LIB}_i")
+endif()
+
+set(FLEXT_SINGLE_LIB ${FLEXT_SINGLE_LIB} CACHE STRING "Flext multi library name")
+
+add_library(${FLEXT_SINGLE_LIB} STATIC $<TARGET_OBJECTS:objects>)
+target_compile_definitions(${FLEXT_SINGLE_LIB} PRIVATE FLEXT_THREADS)
+
+set( LEGACY_LINK   lib${FLEXT_SINGLE_LIB}.a)
+set( LEGACY_TARGET lib${FLEXT_SINGLE_LIB}.a.${PROJECT_VERSION})
+install(FILES ${CMAKE_BINARY_DIR}/${LEGACY_LINK} DESTINATION ${FLEXT_INSTALL_PATH})
+install(CODE "execute_process(
+COMMAND bash -c \" echo target is ${LEGACY_TARGET};
+ln -s ${FLEXT_INSTALL_PATH}/${LEGACY_LINK} ${FLEXT_INSTALL_PATH}/${LEGACY_TARGET}
+\")")
+
+############        MULTI  RULE        ############
+set(FLEXT_MULTI_LIB "${FLEXT_PREFIX_LIB}_t")
+
+if(CMAKE_BUILD_TYPE MATCHES "Debug")
+    set(FLEXT_MULTI_LIB "${FLEXT_MULTI_LIB}d")
+endif()
+
+if(PD_INSTANCE)
+    set(FLEXT_MULTI_LIB "${FLEXT_MULTI_LIB}_i")
+endif()
+
+set(FLEXT_MULTI_LIB ${FLEXT_MULTI_LIB} CACHE STRING "Flext multi library name")
+
+add_library(${FLEXT_MULTI_LIB} STATIC $<TARGET_OBJECTS:objects>)
+target_compile_definitions(${FLEXT_MULTI_LIB} PRIVATE FLEXT_THREADS)
+
+set( LEGACY_LINK   lib${FLEXT_MULTI_LIB}.a)
+set( LEGACY_TARGET lib${FLEXT_MULTI_LIB}.a.${PROJECT_VERSION})
+install(FILES ${CMAKE_BINARY_DIR}/${LEGACY_LINK} DESTINATION ${FLEXT_INSTALL_PATH})
+install(CODE "execute_process(
+COMMAND bash -c \" echo target is ${LEGACY_TARGET};
+ln -s ${FLEXT_INSTALL_PATH}/${LEGACY_LINK} ${FLEXT_INSTALL_PATH}/${LEGACY_TARGET}
+\")")
+
+# ###########        SHARED RULE        ############
+set(FLEXT_SHARED_LIB "${FLEXT_PREFIX_LIB}")
+if(CMAKE_BUILD_TYPE MATCHES "Debug")
+    set(FLEXT_SHARED_LIB "${FLEXT_SHARED_LIB}_d")
+endif()
+
+if(PD_INSTANCE)
+    set(FLEXT_SHARED_LIB "${FLEXT_SHARED_LIB}_i")
+endif()
+
+set(FLEXT_SHARED_LIB ${FLEXT_SHARED_LIB} CACHE STRING "Flext shared library name")
+
+add_library(${FLEXT_SHARED_LIB} SHARED $<TARGET_OBJECTS:objects>)
+target_compile_options(${FLEXT_SHARED_LIB} PRIVATE -rdynamic -shared -fPIC -Wl,-rpath,"\$ORIGIN",--enable-new-dtags)
+
+target_compile_definitions(${FLEXT_SHARED_LIB} PRIVATE FLEXT_SHARED)
+target_link_libraries(${FLEXT_SHARED_LIB}
     PRIVATE -lc
     PRIVATE -lm
 )
 
-install(FILES ${CMAKE_BINARY_DIR}/lib${PROJECT_NAME}-pd.so DESTINATION ${FLEXT_INSTALL_PATH}/${PROJECT_NAME})
+set(LEGACY_LINK lib${FLEXT_SHARED_LIB}.so)
+set(LEGACY_TARGET lib${FLEXT_SHARED_LIB}.so.${PROJECT_VERSION})
+install(FILES ${CMAKE_BINARY_DIR}/${LEGACY_LINK} DESTINATION ${FLEXT_INSTALL_PATH})
+install(CODE "execute_process(
+    COMMAND bash -c \"
+    ln -s ${FLEXT_INSTALL_PATH}/${LEGACY_LINK} ${FLEXT_INSTALL_PATH}/${LEGACY_TARGET};
+    ln -s ${FLEXT_INSTALL_PATH}/${LEGACY_LINK} ${FLEXT_INSTALL_PATH}/lib${FLEXT_PREFIX_LIB}.so;
+    \")")
+
 install(FILES ${FLEXT_SOURCES} ${FLEXT_HEADERS} DESTINATION ${FLEXT_SRC_PATH}/${PROJECT_NAME})
+install(FILES ${FLEXT_LOCKFREE} DESTINATION ${FLEXT_SRC_PATH}/${PROJECT_NAME}/lockfree)
