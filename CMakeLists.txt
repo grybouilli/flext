@@ -14,8 +14,8 @@ set(PD_SOURCE_PATH ${PD_SOURCE_PATH_DEFAULT} CACHE PATH "Pd src path")
 set(PD_INSTANCE OFF CACHE BOOL "Builds with PDINSTANCE defined")
 
 # setting stk source
-set(STK_SOURCE_PATH_DEFAULT /usr/local/include/stk)
-set(STK_SOURCE_PATH ${STK_SOURCE_PATH_DEFAULT} CACHE PATH "STK src path")
+# set(STK_SOURCE_PATH_DEFAULT /usr/local/include/stk)
+# set(STK_SOURCE_PATH ${STK_SOURCE_PATH_DEFAULT} CACHE PATH "STK src path")
 
 # setting flext install src
 set(FLEXT_SRC_PATH_DEFAULT /usr/local/include)
@@ -47,7 +47,6 @@ set(FLEXT_SOURCES
     source/flproxy.cpp
     source/flqueue.cpp
     source/flsimd.cpp
-    source/flstk.cpp
     source/flsupport.cpp
     source/flthr.cpp
     source/fltimer.cpp
@@ -102,11 +101,13 @@ add_library(objects OBJECT
 target_compile_definitions(objects PRIVATE FLEXT_USE_CMEM)
 target_compile_definitions(objects PRIVATE FLEXT_USE_SIMD)
 target_compile_definitions(objects PRIVATE FLEXT_EXPORTS)
+target_compile_definitions(objects PRIVATE FLEXT_SHARED)
 target_compile_definitions(objects PRIVATE FLEXT_SYS=2)
 target_compile_definitions(objects PRIVATE PD)
 
 if(${PD_INSTANCE})
     target_compile_definitions(objects PRIVATE PDINSTANCE)
+    target_compile_definitions(objects PRIVATE PDTHREAD)
 endif()
 
 target_compile_options(objects PRIVATE -O3 -ffast-math -fPIC -fvisibility-inlines-hidden)
@@ -140,7 +141,7 @@ set( LEGACY_TARGET lib${FLEXT_SINGLE_LIB}.a.${PROJECT_VERSION})
 install(FILES ${CMAKE_BINARY_DIR}/${LEGACY_LINK} DESTINATION ${FLEXT_INSTALL_PATH})
 install(CODE "execute_process(
 COMMAND bash -c \" echo target is ${LEGACY_TARGET};
-ln -s ${FLEXT_INSTALL_PATH}/${LEGACY_LINK} ${FLEXT_INSTALL_PATH}/${LEGACY_TARGET}
+$(ln -s ${FLEXT_INSTALL_PATH}/${LEGACY_LINK} ${FLEXT_INSTALL_PATH}/${LEGACY_TARGET} 2> /tmp/${PROJECT_NAME}tmp.out)  || (rm ${FLEXT_INSTALL_PATH}/${LEGACY_TARGET} && ln -s ${FLEXT_INSTALL_PATH}/${LEGACY_LINK} ${FLEXT_INSTALL_PATH}/${LEGACY_TARGET});
 \")")
 
 ############        MULTI  RULE        ############
@@ -164,7 +165,7 @@ set( LEGACY_TARGET lib${FLEXT_MULTI_LIB}.a.${PROJECT_VERSION})
 install(FILES ${CMAKE_BINARY_DIR}/${LEGACY_LINK} DESTINATION ${FLEXT_INSTALL_PATH})
 install(CODE "execute_process(
 COMMAND bash -c \" echo target is ${LEGACY_TARGET};
-ln -s ${FLEXT_INSTALL_PATH}/${LEGACY_LINK} ${FLEXT_INSTALL_PATH}/${LEGACY_TARGET}
+$(ln -s ${FLEXT_INSTALL_PATH}/${LEGACY_LINK} ${FLEXT_INSTALL_PATH}/${LEGACY_TARGET} 2> /tmp/${PROJECT_NAME}tmp.out)  || (rm ${FLEXT_INSTALL_PATH}/${LEGACY_TARGET} && ln -s ${FLEXT_INSTALL_PATH}/${LEGACY_LINK} ${FLEXT_INSTALL_PATH}/${LEGACY_TARGET});
 \")")
 
 # ###########        SHARED RULE        ############
@@ -190,11 +191,19 @@ target_link_libraries(${FLEXT_SHARED_LIB}
 
 set(LEGACY_LINK lib${FLEXT_SHARED_LIB}.so)
 set(LEGACY_TARGET lib${FLEXT_SHARED_LIB}.so.${PROJECT_VERSION})
+
+set(FLEXT_LIB_FINAL "lib${FLEXT_PREFIX_LIB}")
+if(NOT PD_INSTANCE)
+set(FLEXT_LIB_FINAL "${FLEXT_LIB_FINAL}.so")
+else()
+set(FLEXT_LIB_FINAL "${FLEXT_LIB_FINAL}_i.so")
+endif()
+
 install(FILES ${CMAKE_BINARY_DIR}/${LEGACY_LINK} DESTINATION ${FLEXT_INSTALL_PATH})
 install(CODE "execute_process(
     COMMAND bash -c \"
-    ln -s ${FLEXT_INSTALL_PATH}/${LEGACY_LINK} ${FLEXT_INSTALL_PATH}/${LEGACY_TARGET};
-    ln -s ${FLEXT_INSTALL_PATH}/${LEGACY_LINK} ${FLEXT_INSTALL_PATH}/lib${FLEXT_PREFIX_LIB}.so;
+    $(ln -s ${FLEXT_INSTALL_PATH}/${LEGACY_LINK} ${FLEXT_INSTALL_PATH}/${LEGACY_TARGET} 2> /tmp/${PROJECT_NAME}tmp.out)  || (rm ${FLEXT_INSTALL_PATH}/${LEGACY_TARGET} && ln -s ${FLEXT_INSTALL_PATH}/${LEGACY_LINK} ${FLEXT_INSTALL_PATH}/${LEGACY_TARGET});
+    $(ln -s ${FLEXT_INSTALL_PATH}/${LEGACY_LINK} ${FLEXT_INSTALL_PATH}/${FLEXT_LIB_FINAL} 2> /tmp/${PROJECT_NAME}tmp.out)  || (rm ${FLEXT_INSTALL_PATH}/${FLEXT_LIB_FINAL} && ln -s ${FLEXT_INSTALL_PATH}/${LEGACY_LINK} ${FLEXT_INSTALL_PATH}/${FLEXT_LIB_FINAL});
     \")")
 
 install(FILES ${FLEXT_SOURCES} ${FLEXT_HEADERS} DESTINATION ${FLEXT_SRC_PATH}/${PROJECT_NAME})
