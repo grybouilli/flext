@@ -63,4 +63,4 @@ m4/
 
 *.log
 
-*build
+*-build
